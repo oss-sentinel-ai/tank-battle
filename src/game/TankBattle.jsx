@@ -132,6 +132,14 @@ const tankBlockedByMap = (map, x, y) => {
   return pts.some(([px, py]) => isBlocking(tileAt(map, px, py)))
 }
 
+const loadHighScore = () => {
+  try {
+    return parseInt(localStorage.getItem('tank-battle-highscore'), 10) || 0
+  } catch {
+    return 0
+  }
+}
+
 // ─── Component ─────────────────────────────────────────────────────
 export default function TankBattle() {
   const canvasRef = useRef(null)
@@ -145,6 +153,7 @@ export default function TankBattle() {
     level: 1,
     remaining: LEVEL_ENEMY_POOL,
     phase: 'playing',
+    highScore: loadHighScore(),
   })
 
   const initGame = useCallback((levelIdx = 0, carry = null) => {
@@ -173,6 +182,10 @@ export default function TankBattle() {
       spawnIdx: 0,
       phase: 'playing',
       lastTs: now,
+      paused: false,
+      explosions: [],
+      highScore: loadHighScore(),
+      highScoreSaved: false,
     }
     setStatus({
       score: stateRef.current.score,
@@ -180,6 +193,7 @@ export default function TankBattle() {
       level: stateRef.current.level,
       remaining: stateRef.current.enemyPool,
       phase: 'playing',
+      highScore: stateRef.current.highScore,
     })
   }, [])
 
@@ -377,6 +391,11 @@ export default function TankBattle() {
             ) {
               e.dead = true
               s.score += 100
+              s.explosions.push({
+                x: e.x + TILE / 2,
+                y: e.y + TILE / 2,
+                start: performance.now(),
+              })
               hit = true
               break
             }
@@ -391,6 +410,11 @@ export default function TankBattle() {
           ) {
             p.dead = true
             s.lives -= 1
+            s.explosions.push({
+              x: p.x + TILE / 2,
+              y: p.y + TILE / 2,
+              start: performance.now(),
+            })
             hit = true
           }
         }
@@ -560,6 +584,23 @@ export default function TankBattle() {
     // bullets
     ctx.fillStyle = '#fff'
     for (const b of s.bullets) ctx.fillRect(b.x, b.y, BULLET_SIZE, BULLET_SIZE)
+    // explosions
+    const now = performance.now()
+    for (const ex of s.explosions) {
+      const progress = Math.min(1, (now - ex.start) / 500)
+      const radius = progress * TILE
+      const alpha = 1 - progress
+      ctx.save()
+      ctx.globalAlpha = alpha
+      ctx.fillStyle = '#ff8800'
+      ctx.beginPath()
+      ctx.arc(ex.x, ex.y, radius, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.strokeStyle = '#ff4444'
+      ctx.lineWidth = 3
+      ctx.stroke()
+      ctx.restore()
+    }
     // overlays
     if (s.phase === 'won' || s.phase === 'lost') {
       ctx.fillStyle = 'rgba(0,0,0,0.65)'
@@ -583,6 +624,19 @@ export default function TankBattle() {
         SIZE / 2 + 24,
       )
     }
+    // paused overlay
+    if (s.paused) {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'
+      ctx.fillRect(0, 0, SIZE, SIZE)
+      ctx.fillStyle = '#f5c542'
+      ctx.font = 'bold 48px system-ui'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('PAUSED', SIZE / 2, SIZE / 2)
+      ctx.fillStyle = '#e6edf3'
+      ctx.font = '16px system-ui'
+      ctx.fillText('按 P 或 ESC 继续', SIZE / 2, SIZE / 2 + 36)
+    }
   }
 
   // ─── Main loop ──────────────────────────────────────────────────
@@ -604,6 +658,12 @@ export default function TankBattle() {
       ) {
         e.preventDefault()
       }
+      if (e.code === 'KeyP' || e.code === 'Escape') {
+        const s = stateRef.current
+        if (s && s.phase === 'playing') {
+          s.paused = !s.paused
+        }
+      }
     }
     const onKeyUp = (e) => {
       keysRef.current[e.code] = false
@@ -616,7 +676,7 @@ export default function TankBattle() {
       const dt = Math.min(50, ts - s.lastTs)
       s.lastTs = ts
 
-      if (s.phase === 'playing') {
+      if (s.phase === 'playing' && !s.paused) {
         // player input
         const p = s.player
         if (!p.dead) {
@@ -667,13 +727,28 @@ export default function TankBattle() {
         ) {
           s.phase = 'won'
         }
+        // save high score on game over
+        if (s.phase === 'lost' && !s.highScoreSaved) {
+          s.highScoreSaved = true
+          if (s.score > s.highScore) {
+            s.highScore = s.score
+            try {
+              localStorage.setItem('tank-battle-highscore', String(s.score))
+            } catch {}
+          }
+        }
         setStatus({
           score: s.score,
           lives: s.lives,
           level: s.level,
           remaining: s.enemyPool + s.enemies.length,
           phase: s.phase,
+          highScore: s.highScore,
         })
+      }
+      // age explosions (freeze when paused)
+      if (!s.paused) {
+        s.explosions = s.explosions.filter((ex) => ts - ex.start < 500)
       }
       draw(ctx)
       rafRef.current = requestAnimationFrame(loop)
@@ -735,6 +810,10 @@ export default function TankBattle() {
             <span>分数</span>
             <b>{status.score}</b>
           </div>
+          <div className="tb-stat">
+            <span>最高分</span>
+            <b>{status.highScore}</b>
+          </div>
           <div className="tb-tips">
             <div>
               <kbd>↑</kbd>
@@ -747,6 +826,9 @@ export default function TankBattle() {
             </div>
             <div>
               <kbd>R</kbd> 重开 · <kbd>N</kbd> 下一关
+            </div>
+            <div>
+              <kbd>P</kbd> 或 <kbd>ESC</kbd> 暂停
             </div>
           </div>
         </aside>
