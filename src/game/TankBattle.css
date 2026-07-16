@@ -1,0 +1,81 @@
+.tb-wrap {
+  color: #e6edf3;
+  padding: 32px 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.tb-header h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  letter-spacing: 2px;
+}
+
+.tb-header p {
+  margin: 0 0 20px;
+  color: #7d8590;
+  font-size: 13px;
+}
+
+.tb-stage {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.tb-stage canvas {
+  background: #000;
+  border: 2px solid #30363d;
+  border-radius: 6px;
+  image-rendering: pixelated;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+  outline: none;
+}
+
+.tb-hud {
+  min-width: 170px;
+  padding: 16px;
+  background: #151b23;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tb-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #7d8590;
+}
+
+.tb-stat b {
+  color: #f5c542;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tb-tips {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #30363d;
+  font-size: 11px;
+  color: #7d8590;
+  line-height: 1.8;
+}
+
+.tb-tips kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid #30363d;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: #0b0e14;
+  color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  margin-right: 4px;
+}
