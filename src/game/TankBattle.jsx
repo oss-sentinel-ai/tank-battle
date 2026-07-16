@@ -6,9 +6,9 @@ const TILE = 32
 const GRID = 16
 const SIZE = TILE * GRID // 512
 
-const PLAYER_SPEED = 2
-const ENEMY_SPEED = 1.3
-const BULLET_SPEED = 5
+const PLAYER_SPEED = 120
+const ENEMY_SPEED = 78
+const BULLET_SPEED = 300
 const BULLET_SIZE = 6
 
 const PLAYER_FIRE_CD = 320
@@ -251,15 +251,15 @@ export default function TankBattle() {
     t.cd = t.type === 'player' ? PLAYER_FIRE_CD : ENEMY_FIRE_CD
   }
 
-  const moveTank = (t, speed) => {
+  const moveTank = (t, speed, dt) => {
     const s = stateRef.current
     const [dx, dy] = DIR_DXY[t.dir]
     // snap the perpendicular axis a bit — makes it easier to fit through
     // 1-tile-wide corridors like in Battle City
     if (dx !== 0) t.y = Math.round(t.y / 4) * 4
     if (dy !== 0) t.x = Math.round(t.x / 4) * 4
-    const nx = t.x + dx * speed
-    const ny = t.y + dy * speed
+    const nx = t.x + dx * speed * (dt / 1000)
+    const ny = t.y + dy * speed * (dt / 1000)
     if (tankBlockedByMap(s.map, nx, ny)) return false
     const box = { x: nx, y: ny, w: TILE, h: TILE }
     const others = [s.player, ...s.enemies]
@@ -303,7 +303,7 @@ export default function TankBattle() {
     }
     // random shooting
     if (Math.random() < 0.025) fire(e, now)
-    const moved = moveTank(e, ENEMY_SPEED)
+    const moved = moveTank(e, ENEMY_SPEED, dt)
     if (!moved) e.blocked = true
   }
 
@@ -314,30 +314,37 @@ export default function TankBattle() {
     }
   }
 
-  const updateBullets = () => {
+  const updateBullets = (dt) => {
     const s = stateRef.current
     const survivors = []
     for (const b of s.bullets) {
       if (b._dead) continue
-      b.x += b.dx
-      b.y += b.dy
+      // Calculate movement step
+      const moveX = b.dx * (dt / 1000)
+      const moveY = b.dy * (dt / 1000)
+      const totalDist = Math.abs(moveX) + Math.abs(moveY)
+      const steps = Math.max(1, Math.ceil(totalDist / 2)) // Check every 2 pixels
       let hit = false
-      if (b.x < 0 || b.y < 0 || b.x + BULLET_SIZE > SIZE || b.y + BULLET_SIZE > SIZE) {
-        hit = true
-      }
-      // wall check — sample the head of the bullet based on direction
-      if (!hit) {
+      for (let step = 0; step <= steps; step++) {
+        const stepT = step / steps
+        const checkX = b.x + moveX * stepT
+        const checkY = b.y + moveY * stepT
+        if (checkX < 0 || checkY < 0 || checkX + BULLET_SIZE > SIZE || checkY + BULLET_SIZE > SIZE) {
+          hit = true
+          break
+        }
+        // wall check — sample the head of the bullet based on direction
         const headPts = [
-          [b.x + BULLET_SIZE / 2, b.y + BULLET_SIZE / 2],
-          [b.x + (b.dx > 0 ? BULLET_SIZE : 0), b.y + BULLET_SIZE / 2],
-          [b.x + BULLET_SIZE / 2, b.y + (b.dy > 0 ? BULLET_SIZE : 0)],
+          [checkX + BULLET_SIZE / 2, checkY + BULLET_SIZE / 2],
+          [checkX + (b.dx > 0 ? BULLET_SIZE : 0), checkY + BULLET_SIZE / 2],
+          [checkX + BULLET_SIZE / 2, checkY + (b.dy > 0 ? BULLET_SIZE : 0)],
         ]
         for (const [px, py] of headPts) {
           const c = Math.floor(px / TILE)
           const r = Math.floor(py / TILE)
           if (r < 0 || r >= GRID || c < 0 || c >= GRID) continue
-          const t = s.map[r][c]
-          if (t === T_BRICK) {
+          const tile = s.map[r][c]
+          if (tile === T_BRICK) {
             s.map[r][c] = T_EMPTY
             // also nick the neighbouring tile on the perpendicular axis
             if (b.dx !== 0) {
@@ -349,20 +356,19 @@ export default function TankBattle() {
             }
             hit = true
             break
-          } else if (t === T_STEEL) {
+          } else if (tile === T_STEEL) {
             hit = true
             break
-          } else if (t === T_BASE) {
+          } else if (tile === T_BASE) {
             s.map[r][c] = T_EMPTY
             s.phase = 'lost'
             hit = true
             break
           }
         }
-      }
-      // tank collisions
-      if (!hit) {
-        const bulletBox = { x: b.x, y: b.y, w: BULLET_SIZE, h: BULLET_SIZE }
+        if (hit) break
+        // tank collisions
+        const bulletBox = { x: checkX, y: checkY, w: BULLET_SIZE, h: BULLET_SIZE }
         if (b.owner === 'player') {
           for (const e of s.enemies) {
             if (
@@ -407,8 +413,14 @@ export default function TankBattle() {
             }
           }
         }
+        if (hit) break
       }
-      if (!hit) survivors.push(b)
+      // If no hit, update final position
+      if (!hit) {
+        b.x += moveX
+        b.y += moveY
+        survivors.push(b)
+      }
     }
     s.bullets = survivors
   }
@@ -611,16 +623,16 @@ export default function TankBattle() {
           const K = keysRef.current
           if (K.ArrowUp || K.KeyW) {
             p.dir = DIR_UP
-            moveTank(p, PLAYER_SPEED)
+            moveTank(p, PLAYER_SPEED, dt)
           } else if (K.ArrowDown || K.KeyS) {
             p.dir = DIR_DOWN
-            moveTank(p, PLAYER_SPEED)
+            moveTank(p, PLAYER_SPEED, dt)
           } else if (K.ArrowLeft || K.KeyA) {
             p.dir = DIR_LEFT
-            moveTank(p, PLAYER_SPEED)
+            moveTank(p, PLAYER_SPEED, dt)
           } else if (K.ArrowRight || K.KeyD) {
             p.dir = DIR_RIGHT
-            moveTank(p, PLAYER_SPEED)
+            moveTank(p, PLAYER_SPEED, dt)
           }
           if (K.Space) fire(p, ts)
         }
@@ -633,7 +645,7 @@ export default function TankBattle() {
           enemyAI(e, dt, ts)
         }
         // bullets
-        updateBullets()
+        updateBullets(dt)
         // reap
         s.enemies = s.enemies.filter((e) => !e.dead)
         // spawn
