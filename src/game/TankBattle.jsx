@@ -234,6 +234,7 @@ export default function TankBattle() {
           dir: DIR_DOWN,
           cd: 500 + Math.random() * 300,
           aiCd: 400 + Math.random() * 800,
+          fireCd: 0,
           moving: true,
           dead: false,
           spawnedAt: performance.now(),
@@ -315,8 +316,12 @@ export default function TankBattle() {
           : dirs[Math.floor(Math.random() * 4)]
       e.blocked = false
     }
-    // random shooting
-    if (Math.random() < 0.025) fire(e, now)
+    // time-based shooting (frame-rate independent)
+    e.fireCd = (e.fireCd || 0) - dt
+    if (e.fireCd <= 0) {
+      fire(e, now)
+      e.fireCd = ENEMY_FIRE_CD
+    }
     const moved = moveTank(e, ENEMY_SPEED, dt)
     if (!moved) e.blocked = true
   }
@@ -728,7 +733,7 @@ export default function TankBattle() {
           s.phase = 'won'
         }
         // save high score on game over
-        if (s.phase === 'lost' && !s.highScoreSaved) {
+        if ((s.phase === 'lost' || s.phase === 'won') && !s.highScoreSaved) {
           s.highScoreSaved = true
           if (s.score > s.highScore) {
             s.highScore = s.score
